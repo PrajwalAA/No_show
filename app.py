@@ -1,5 +1,5 @@
 import pandas as pd
-import joblib 
+import joblib
 import os
 
 # --- 1. Load the saved model and LabelEncoders ---
@@ -16,17 +16,16 @@ try:
     loaded_model = joblib.load(model_path)
     loaded_label_encoders = joblib.load(encoders_path)
     print("✅ Model and LabelEncoders loaded successfully.")
-    
+
     # Load the data file to get the list of features
     df = pd.read_excel(data_path)
-    
-    # --- CHANGE MADE HERE ---
-    # Define columns to remove from user input. We'll use default values for them.
-    cols_to_exclude = ["customer", "appointment"] 
-    
+
+    # Drop unwanted columns permanently
+    cols_to_exclude = ["customer", "appointment"]
+
     # Get the list of columns used for training (features)
     feature_cols = df.drop(columns=["status", "Unnamed: 0"] + cols_to_exclude, errors='ignore').columns.tolist()
-    
+
     # Get the list of categorical columns from the loaded encoders
     cat_cols = list(loaded_label_encoders.keys())
 
@@ -41,7 +40,6 @@ user_input_data = {}
 # Loop through each feature to get user input
 for col in feature_cols:
     if col in cat_cols:
-        # Check if the column exists in the encoders
         if col in loaded_label_encoders:
             le = loaded_label_encoders[col]
             options = le.classes_
@@ -60,7 +58,6 @@ for col in feature_cols:
                     print("Invalid input. Please enter a number.")
             user_input_data[col] = [value]
     else:
-        # Handle numerical input
         while True:
             try:
                 value = float(input(f"Enter value for '{col}': "))
@@ -69,24 +66,12 @@ for col in feature_cols:
             except ValueError:
                 print("Invalid input. Please enter a number.")
 
-# Add default values for the columns that were removed from the input prompt
-for col in cols_to_exclude:
-    if col in df.columns:
-        if df[col].dtype == 'object':
-            # Use a default categorical value, e.g., the first class
-            le = loaded_label_encoders[col]
-            user_input_data[col] = [le.inverse_transform([0])[0]]
-        else:
-            # Use a default numerical value, e.g., 0
-            user_input_data[col] = [0]
-
-
 # --- 3. Prepare data and make prediction ---
 # Convert input to DataFrame
 user_df = pd.DataFrame(user_input_data)
 
-# Ensure column order matches the training data, including the excluded columns
-all_trained_cols = df.drop(columns=["status", "Unnamed: 0"], errors='ignore').columns.tolist()
+# Ensure column order matches the training data (excluding unwanted columns)
+all_trained_cols = df.drop(columns=["status", "Unnamed: 0", "customer", "appointment"], errors='ignore').columns.tolist()
 user_df = user_df.reindex(columns=all_trained_cols, fill_value=0)
 
 # Encode categorical columns
@@ -105,6 +90,6 @@ try:
 
     print("\n--- Prediction for your input ---")
     print(f"The predicted status is: {prediction_status[0]}")
-    
+
 except Exception as e:
     print(f"\nAn error occurred during prediction: {e}")
