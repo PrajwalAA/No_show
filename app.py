@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import joblib
 import os
-import math
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -53,7 +52,9 @@ user_input_data = {}
 
 # Determine columns per row (for side-by-side layout)
 cols_per_row = 3
-num_rows = math.ceil(len(feature_cols) / cols_per_row)
+# Corrected calculation without using the 'math' library
+num_features = len(feature_cols)
+num_rows = num_features // cols_per_row + (1 if num_features % cols_per_row > 0 else 0)
 
 for row_idx in range(num_rows):
     # Select the subset of features for this row
