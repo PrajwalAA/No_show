@@ -3,108 +3,132 @@ import pandas as pd
 import joblib
 import os
 
-# --- Configuration & Utility Functions ---
-
-# Use st.cache_data to cache the loaded model and encoders.
-# This prevents them from being reloaded every time the app is updated.
-@st.cache_data
-def load_resources():
-    """Loads the pre-trained model and label encoders."""
-    if os.path.exists("mango_model.pkl") and os.path.exists("mango_label_encoders.pkl"):
-        try:
-            model = joblib.load("mango_model.pkl")
-            encoders = joblib.load("mango_label_encoders.pkl")
-            return model, encoders
-        except Exception as e:
-            st.error(f"Error loading model or encoders: {e}")
-            return None, None
-    else:
-        st.error("Error: 'mango_model.pkl' or 'mango_label_encoders.pkl' not found.")
-        st.info("Please ensure these files are in the same directory as this script.")
-        return None, None
-
-# --- Main Application ---
-
+# --- Page Configuration ---
 st.set_page_config(
-    page_title="Mango Status Predictor",
-    page_icon="🥭",
-    layout="centered",
-    initial_sidebar_state="expanded"
+    page_title="Customer Churn Predictor",
+    page_icon="📊",
+    layout="centered"
 )
 
-st.title("🥭 Mango Status Predictor")
-st.markdown("Enter the attributes of the mango to predict its ripeness status.")
+# --- Function to load the model and encoders ---
+# The st.cache_resource decorator ensures this function runs only once.
+@st.cache_resource
+def load_resources():
+    model_path = "mango_model.pkl"
+    encoders_path = "mango_label_encoders.pkl"
+    data_path = "new.xlsx"
 
-# Load the model and encoders. The app will halt if they are not found.
-loaded_model, loaded_label_encoders = load_resources()
+    if not os.path.exists(model_path):
+        st.error(f"Error: The model file '{model_path}' was not found.")
+        st.stop()
+    if not os.path.exists(encoders_path):
+        st.error(f"Error: The encoders file '{encoders_path}' was not found.")
+        st.stop()
+    if not os.path.exists(data_path):
+        st.error(f"Error: The data file '{data_path}' was not found.")
+        st.stop()
 
-if loaded_model is None or loaded_label_encoders is None:
-    st.stop() # Stop the app execution if files are missing.
-
-# In a real-world scenario, you would have access to the feature names from the training script.
-# For this example, we'll assume the following columns and their types.
-# You must adjust these to match your actual training data.
-FEATURE_COLS = ['Size', 'Color', 'Sweetness', 'Aroma', 'Weight']
-CAT_COLS = ['Color', 'Aroma']
-NUM_COLS = [col for col in FEATURE_COLS if col not in CAT_COLS]
-
-# The target variable's label encoder is also needed for a meaningful output.
-# We'll assume the target variable was named 'Status'.
-TARGET_ENCODER = loaded_label_encoders.get('Status')
-
-# --- User Input Form ---
-
-with st.form("input_form"):
-    st.header("Enter Mango Details")
-    user_input_data = {}
-
-    # Gather categorical inputs
-    for col in CAT_COLS:
-        if col in loaded_label_encoders:
-            le = loaded_label_encoders[col]
-            options = le.classes_
-            user_input_data[col] = st.selectbox(f"Select a value for '{col}'", options)
-        else:
-            st.warning(f"Label encoder for '{col}' not found. Please check your `mango_label_encoders.pkl` file.")
-            user_input_data[col] = st.text_input(f"Enter value for '{col}' (no encoder found)")
-
-    # Gather numerical inputs
-    for col in NUM_COLS:
-        user_input_data[col] = st.number_input(f"Enter value for '{col}'", value=1.0)
-    
-    # Prediction button
-    submitted = st.form_submit_button("Predict Status")
-
-# --- Prediction Logic ---
-if submitted:
     try:
-        # Convert input to DataFrame, ensuring columns match the model's training data.
-        # The order of columns in the DataFrame must be the same as the training data.
-        user_df = pd.DataFrame([user_input_data])[FEATURE_COLS]
+        loaded_model = joblib.load(model_path)
+        loaded_label_encoders = joblib.load(encoders_path)
+        # Load the data just to get the list of columns
+        df = pd.read_excel(data_path)
+        cat_cols = [col for col in df.columns if col in loaded_label_encoders]
+        feature_cols = df.drop(columns=["status", "Unnamed: 0"], errors='ignore').columns.tolist()
+        
+        return loaded_model, loaded_label_encoders, cat_cols, feature_cols
+    
+    except Exception as e:
+        st.error(f"An error occurred while loading files: {e}")
+        st.stop()
 
-        # Encode categorical columns using the loaded encoders.
-        for col in CAT_COLS:
-            le = loaded_label_encoders[col]
-            # Use le.transform on the single value in the DataFrame column
-            user_df[col] = le.transform(user_df[col])
+# Load the resources
+model, label_encoders, cat_cols, feature_cols = load_resources()
 
-        # Ensure all columns are of numeric format for the model.
-        user_df = user_df.apply(pd.to_numeric, errors='coerce')
-        user_df.dropna(inplace=True)
-        if user_df.empty:
-            st.error("Invalid input detected. Please check your values.")
-        else:
-            # Make prediction
-            prediction_encoded = loaded_model.predict(user_df)
+# --- Main App Title and Description ---
+st.title("📊 Customer Churn Prediction App")
+st.write("This application predicts the churn status of a customer based on their characteristics.")
+st.markdown("---")
 
-            # Get the human-readable prediction label.
-            if TARGET_ENCODER:
-                prediction_label = TARGET_ENCODER.inverse_transform(prediction_encoded)[0]
-                st.success(f"The predicted status is: **{prediction_label}**")
+# --- User Input Section ---
+st.header("Enter Customer Details")
+
+# Dictionary to store user inputs
+user_input_data = {}
+
+# Create input widgets for each feature
+for col in feature_cols:
+    if col in cat_cols:
+        # Get options from the loaded LabelEncoder
+        le = label_encoders[col]
+        options = le.classes_
+        
+        # Use a selectbox for categorical features
+        selected_option = st.selectbox(
+            f"Select value for **'{col}'**:",
+            options=options,
+            key=col
+        )
+        user_input_data[col] = selected_option
+    else:
+        # Use a number input for numerical features
+        try:
+            # We can use the original dataframe to get a hint of the data type
+            df_temp = pd.read_excel("new.xlsx")
+            default_value = df_temp[col].mean()
+            if df_temp[col].dtype == 'int64':
+                 user_input_data[col] = st.number_input(
+                    f"Enter value for **'{col}'**:",
+                    value=int(default_value),
+                    step=1,
+                    key=col
+                )
             else:
-                st.warning("Target label encoder not found. Displaying raw prediction.")
-                st.info(f"The predicted status is: {prediction_encoded[0]}")
+                user_input_data[col] = st.number_input(
+                    f"Enter value for **'{col}'**:",
+                    value=default_value,
+                    key=col
+                )
+        except:
+            user_input_data[col] = st.number_input(
+                f"Enter value for **'{col}'**:",
+                value=0.0,
+                key=col
+            )
 
+
+# --- Prediction Button ---
+if st.button("Predict Churn Status", type="primary"):
+    # Convert user input to a DataFrame
+    user_df = pd.DataFrame([user_input_data])
+    
+    # Ensure column order matches the training data
+    user_df = user_df[feature_cols]
+
+    # Encode categorical columns using the loaded encoders
+    for col in cat_cols:
+        if col in user_df.columns:
+            le = label_encoders[col]
+            try:
+                user_df[col] = le.transform(user_df[col])
+            except ValueError as e:
+                st.error(f"Error encoding column '{col}': {e}. Please select a valid option from the list.")
+                st.stop()
+    
+    # Convert all columns to numeric for prediction
+    user_df = user_df.apply(pd.to_numeric)
+    
+    # Make the prediction
+    try:
+        prediction_numeric = model.predict(user_df)
+        
+        # Decode the numerical prediction back to the original string
+        status_le = label_encoders["status"]
+        prediction_status = status_le.inverse_transform(prediction_numeric)
+        
+        st.markdown("---")
+        st.subheader("Prediction Result")
+        st.success(f"The predicted status is: **{prediction_status[0]}**")
+        st.balloons()
     except Exception as e:
         st.error(f"An error occurred during prediction: {e}")
-        st.warning("Please ensure your input values are correct and the model files are compatible.")
