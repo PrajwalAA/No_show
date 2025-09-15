@@ -5,8 +5,8 @@ import os
 
 # --- Page Configuration ---
 st.set_page_config(
-    page_title="Customer Churn Predictor",
-    page_icon="📊",
+    page_title="No-Show Prediction App",
+    page_icon="🗓️",
     layout="centered"
 )
 
@@ -46,12 +46,12 @@ def load_resources():
 model, label_encoders, cat_cols, feature_cols = load_resources()
 
 # --- Main App Title and Description ---
-st.title("📊 Customer Churn Prediction App")
-st.write("This application predicts the churn status of a customer based on their characteristics.")
+st.title("🗓️ No-Show Prediction App")
+st.write("This application predicts whether a person will attend their appointment based on various factors.")
 st.markdown("---")
 
 # --- User Input Section ---
-st.header("Enter Customer Details")
+st.header("Enter Details for Prediction")
 
 # Dictionary to store user inputs
 user_input_data = {}
@@ -98,7 +98,7 @@ for col in feature_cols:
 
 
 # --- Prediction Button ---
-if st.button("Predict Churn Status", type="primary"):
+if st.button("Predict No-Show Status", type="primary"):
     # Convert user input to a DataFrame
     user_df = pd.DataFrame([user_input_data])
     
